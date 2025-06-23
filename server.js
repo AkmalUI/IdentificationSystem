@@ -10,6 +10,11 @@ import ProductRouter from './routes/product.js'
 import imageupload from './routes/imageupload.js'
 import { GetID } from './routes/cache.js'
 import { cache } from './routes/cache.js'
+import { fileURLToPath } from 'url'
+import path from 'path'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 const app = express()
 const server = createServer(app)
@@ -24,7 +29,6 @@ const port = new SerialPort({
 async function openRFID() {
   port.open((err) => {
     if (err) {
-      console.error(`Failed to open port: ${err.message}`)
       setTimeout(openRFID, 5000)
     } else {
       console.log('Port opened successfully.')
@@ -34,7 +38,6 @@ async function openRFID() {
 
 port.open((err) => {
   if (err) {
-    console.error(`Failed to open port: ${err.message}`)
   } else {
     console.log('Port opened successfully.')
   }
@@ -59,11 +62,18 @@ app.use(express.static('public'))
 app.use('/', showroom)
 app.set('view engine', 'ejs')
 app.use(express.json())
+app.use(express.static(path.join(__dirname, 'dist')))
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')))
 
 app.use('/api', ProductRouter)
 app.use('/api', imageupload)
 
+app.get('/{*any}', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'))
+})
+
 server.listen(3000, () => {
+  openRFID()
   GetID()
   console.log('Server is listening on http://localhost:3000')
 })

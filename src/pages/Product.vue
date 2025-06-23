@@ -15,6 +15,7 @@
       <v-data-table
         :items="devices"
         :headers="headers"
+        :sort-by="['UID']"
         class="elevation-1"
         disable-pagination
         dense
@@ -108,7 +109,9 @@
                   label="Screen Count"
                   type="number"
                   min="0"
+                  :max="8"
                   required
+                  @keydown="blockInvalidKeys"
                 ></v-text-field>
               </v-col>
 
@@ -149,10 +152,10 @@
 
                       <v-card-actions class="justify-center" style="padding: 0; min-height: 0">
                         <v-label></v-label>
-                        <v-btn icon @click="deletepicture(card)" color="error" size="x-small"
-                          >DEL</v-btn
-                        >
-                        <v-btn icon @click="triggerFileInput(card)" color="success" size="x-small">
+                        <v-btn icon @click="deleteimage(card)" color="black" size="x-small">
+                          <v-icon>mdi-minus</v-icon>
+                        </v-btn>
+                        <v-btn icon @click="triggerFileInput(card)" color="black" size="x-small">
                           <input
                             type="file"
                             :ref="'fileInput' + card.id"
@@ -160,7 +163,7 @@
                             accept=".jpg,.jpeg,.png"
                             @change="handleFileChange($event, card)"
                           />
-                          ADD
+                          <v-icon>mdi-plus</v-icon>
                         </v-btn>
                       </v-card-actions>
                     </v-card>
@@ -198,11 +201,11 @@ export default {
       viewDialog: false,
       previewDialog: false,
       dialogMode: 'add',
-      uploadedImages: [],
       originalDeviceName: '',
       selectedDevice: { index: '', id: '', name: '', screencount: 0 },
-      devices: [], // initially empty
+      devices: [],
       cards: [],
+      deletecard: [],
       cardStateMap: {},
       carouselIndex: 0,
       previewImageSrc: '',
@@ -249,11 +252,13 @@ export default {
     },
   },
   methods: {
-    triggerFileInput(card) {
-      if (card.exist) {
-        const proceed = confirm(`Image ID ${card.id} already exists. Do you want to replace it?`)
-        if (!proceed) return
+    blockInvalidKeys(event) {
+      const invalidChars = ['e', 'E', '+', '-', '.']
+      if (invalidChars.includes(event.key)) {
+        event.preventDefault()
       }
+    },
+    triggerFileInput(card) {
       const input = this.$refs['fileInput' + card.id]
       if (Array.isArray(input)) {
         input[0].click()
@@ -265,6 +270,7 @@ export default {
       const file = event.target.files[0]
       if (file) {
         this.uploadImage(file, card.id)
+        this.deletecard = this.deletecard.filter((item) => item !== card.id)
       }
     },
     handleImageError(card) {
@@ -286,11 +292,6 @@ export default {
       const data = await res.json()
 
       if (data.success) {
-        this.uploadedImages.push({
-          deviceName: this.selectedDevice.name,
-          cardId: cardId,
-        })
-
         const cardIndex = this.cards.findIndex((c) => c.id === cardId)
         if (cardIndex !== -1) {
           this.cards[cardIndex].imageSrc = data.imageUrl
@@ -312,6 +313,7 @@ export default {
           screencount: item.screen_count,
           actions: true,
         }))
+        this.devices.sort((a, b) => a.UID.localeCompare(b.UID))
       } catch (error) {
         console.error('Error fetching devices:', error)
       }
@@ -321,12 +323,11 @@ export default {
       if (mode === 'edit' && device) {
         this.selectedDevice = { ...device }
         this.originalDeviceName = device.name
-        console.log(this.selectedDevice)
 
         // Save original image paths
         this.cards = Array.from({ length: device.screencount }, (_, index) => {
           const id = index + 1
-          const imagePath = `/images/${device.name}/${id}.jpg`
+          const imagePath = `/images/${device.name}/${id}.jpg?${Date.now()}`
           return {
             id,
             exist: true,
@@ -335,7 +336,7 @@ export default {
           }
         })
       } else {
-        this.selectedDevice = { name: '', id: '', screencount: '' }
+        this.selectedDevice = { index: '', name: '', id: '', screencount: '' }
       }
       this.viewDialog = true
     },
@@ -374,6 +375,7 @@ export default {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+              index: this.selectedDevice.index,
               ItemUID: this.selectedDevice.UID,
               name: this.selectedDevice.name,
               screencount: this.selectedDevice.screencount,
@@ -384,12 +386,25 @@ export default {
 
           const data = await response.json()
           this.devices.push({
+            index: data.index,
             UID: data.ItemUID,
             name: data.name,
             screencount: data.screen_count,
           })
         } else {
           // For edit mode, update product data
+          if (this.deletecard.length > 0) {
+            const imagedelete = await fetch('/api/imagedelete', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                imageid: this.deletecard,
+                device: this.selectedDevice.name,
+              }),
+            })
+
+            if (!imagedelete.ok) throw new Error('Failed to save image on imagedelete')
+          }
           const imageResponse = await fetch('/api/save-image', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -420,9 +435,9 @@ export default {
         }
 
         // Reset form and state
-        this.selectedDevice = { id: '', name: '', screencount: 0 }
-        this.uploadedImages = []
+        this.selectedDevice = { index: '', id: '', name: '', screencount: 0 }
         this.viewDialog = false
+        this.deletecard = []
       } catch (error) {
         console.error('Error saving device:', error)
       }
@@ -446,17 +461,13 @@ export default {
         }
       })
 
-      // Clear state tracking newly uploaded images
-      this.uploadedImages = []
+      this.deletecard = []
     },
-
-    async deletepicture(card) {
-      card.exist = false
-      card.imageSrc = '/images/default/1.jpg'
-      this.cardStateMap[card.id] = {
-        ...this.cardStateMap[card.id],
-        exist: false,
+    async deleteimage(card) {
+      if (!this.deletecard.includes(card.id)) {
+        this.deletecard.push(card.id)
       }
+      card.imageSrc = `/images/default/1.jpg?${Date.now()}`
     },
     openPreview(src) {
       const index = this.cards.findIndex((card) => card.imageSrc === src)

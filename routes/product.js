@@ -39,15 +39,12 @@ router.post('/addproducts', async (req, res) => {
       data: {
         ItemUID: ItemUID,
         name: name,
-        screen_count: screencount,
+        screen_count: String(screencount),
       },
     })
     const imageFolderPath = path.join(__dirname, '..', 'public', 'images', name)
 
-    await fs.mkdir(imageFolderPath, { recursive: true }, (err) => {
-      if (err) throw err
-      console.log('Folder created!')
-    })
+    await fs.mkdir(imageFolderPath, { recursive: true })
 
     res.status(201).json(newProduct)
     await GetID()
@@ -69,10 +66,7 @@ router.delete('/deleteproducts/:ItemUID', async (req, res) => {
 
     const imageFolderPath = path.join(__dirname, '..', 'public', 'images', name)
 
-    await fs.rm(imageFolderPath, { recursive: true }, (err) => {
-      if (err) throw err
-      console.log('Folder created!')
-    })
+    await fs.rm(imageFolderPath, { recursive: true })
 
     res.status(200).json(deletedProduct)
     await GetID()
@@ -93,7 +87,7 @@ router.post('/updateproducts', async (req, res) => {
       data: {
         ItemUID: ItemUID,
         name: name,
-        screen_count: screencount,
+        screen_count: String(screencount),
       },
     })
 

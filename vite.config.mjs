@@ -67,7 +67,7 @@ export default defineConfig({
     extensions: ['.js', '.json', '.jsx', '.mjs', '.ts', '.tsx', '.vue'],
   },
   build: {
-    outDir: 'public', // no need for ../
+    outDir: 'dist', // no need for ../
     emptyOutDir: true,
   },
   server: {

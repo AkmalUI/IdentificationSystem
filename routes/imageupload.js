@@ -39,6 +39,53 @@ router.post('/delete-temp', async (req, res) => {
   }
 })
 
+router.post('/imagedelete', async (req, res) => {
+  try {
+    const { imageid, device } = req.body
+    console.log('imageid:', imageid) // Should be an array of numbers/strings
+    console.log('name:', device)
+    if (!Array.isArray(imageid) || imageid.length === 0) {
+      return res.status(400).json({ success: false, message: 'Invalid or empty image list' })
+    }
+
+    const deletePromises = imageid.map(async (id) => {
+      const imagePath = path.join(process.cwd(), 'public', 'images', device, `${id}.jpg`)
+      const outputPath = path.join(process.cwd(), 'uploads', `${id}.jpg`)
+
+      // Delete first image
+      try {
+        await fs.unlink(imagePath)
+        console.log(`Deleted: ${imagePath}`)
+      } catch (err) {
+        if (err.code === 'ENOENT') {
+          console.warn(`File not found: ${imagePath}`)
+        } else {
+          console.error(`Failed to delete ${imagePath}:`, err)
+        }
+      }
+
+      // Delete second image
+      try {
+        await fs.unlink(outputPath)
+        console.log(`Deleted: ${outputPath}`)
+      } catch (err) {
+        if (err.code === 'ENOENT') {
+          console.warn(`File not found: ${outputPath}`)
+        } else {
+          console.error(`Failed to delete ${outputPath}:`, err)
+        }
+      }
+    })
+
+    await Promise.all(deletePromises)
+
+    res.json({ success: true, deleted: imageid })
+  } catch (error) {
+    console.error('Error in imagedelete:', error)
+    res.status(500).json({ success: false, message: 'Internal Server Error' })
+  }
+})
+
 router.post('/upload', upload.single('image'), async (req, res) => {
   try {
     const { deviceName, cardId } = req.body
